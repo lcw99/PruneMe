@@ -33,7 +33,10 @@ def main(model_path: str, dataset: str, dataset_column: str, batch_size: int, ma
     model = AutoModelForCausalLM.from_pretrained(model_path,  
                                                  device_map="auto", 
                                                  quantization_config=quantization_config, 
-                                                 output_hidden_states=True)
+                                                 output_hidden_states=True,
+                                                 return_dict_in_generate=True,
+                                                 torch_dtype=torch.bfloat16
+                                                )
     
     tokenizer = AutoTokenizer.from_pretrained(model_path)
 
@@ -49,7 +52,7 @@ def main(model_path: str, dataset: str, dataset_column: str, batch_size: int, ma
     dataloader = DataLoader(dataset[dataset_column], batch_size=batch_size, shuffle=False, drop_last=True)
 
     # Initialize a list to store distances for each block across the dataset
-    all_distances = [[] for _ in range(model.config.num_hidden_layers - layers_to_skip)]
+    all_distances = [[] for _ in range(model.config.text_config.num_hidden_layers - layers_to_skip)]
 
 
     for batch in tqdm(dataloader, desc="Processing batches"):
@@ -65,11 +68,12 @@ def main(model_path: str, dataset: str, dataset_column: str, batch_size: int, ma
         last_non_padded_hidden_states = last_non_padded_hidden_states[1:]
         
         # Ensure that the length of last_non_padded_hidden_states matches the number of model hidden layers minus one
-        assert len(last_non_padded_hidden_states) == model.config.num_hidden_layers, "Length of last_non_padded_hidden_states  \
+        assert len(last_non_padded_hidden_states) == model.config.text_config.num_hidden_layers, "Length of last_non_padded_hidden_states  \
         does not match expected number of hidden layers."
 
         # Compute distances and append to all_distances
         distances = compute_block_distances(last_non_padded_hidden_states, layers_to_skip)
+        # print(f"Distances for current batch: {distances}")
         for i, distance in enumerate(distances):
             all_distances[i].append(distance)
 
